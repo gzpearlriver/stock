@@ -1,34 +1,41 @@
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
+#allow chinese character in program
 ''' 处理从163下载的原始文件，导入数据库，计算各类指标'''
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import urllib
-import pathlib
-import time
-import math
-import gc
+#import matplotlib.pyplot as plt
+#import urllib
+#import pathlib
+#import time
+#import math
+#import gc
 import sqlite3 as lite
 
-from pylab import mpl
+#from pylab import mpl
 
-mpl.rcParams['font.sans-serif'] = ['FangSong']  # 指定默认字体
-mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显示为方块的问题
+import sys 
+reload(sys) 
+sys.setdefaultencoding("utf-8")
+
+#mpl.rcParams['font.sans-serif'] = ['FangSong']  # 指定默认字体
+#mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显示为方块的问题
 
 #季度化指标
-season_data = (('营业收入单季', '营业收入万元'),
-               ('营业成本单季', '营业成本万元'),
-               ('营业利润单季', '营业利润万元'),
-               ('净利润单季', '净利润万元'),
-               ('归属于母公司所有者的净利润单季', '归属于母公司所有者的净利润万元'),
-               ('少数股东损益单季', '少数股东损益万元'),
-               ('经营活动产生的现金流量净额单季', '经营活动产生的现金流量净额万元'),
-               ('投资活动产生的现金流量净额单季', '投资活动产生的现金流量净额万元'),
-               ('筹资活动产生的现金流量净额单季', '筹资活动产生的现金流量净额万元'),
-               ('经营活动现金流出小计单季','经营活动现金流出小计万元'),
-               ('经营活动现金流入小计单季','经营活动现金流入小计万元'),
-               ('营业税金及附加单季', '营业税金及附加万元'),
-               ('所得税费用单季', '所得税费用万元'),
+season_data = (('营业收入单季', '营业收入(万元)'),
+               ('营业成本单季', '营业成本(万元)'),
+               ('营业利润单季', '营业利润(万元)'),
+               ('净利润单季', '净利润(万元)'),
+               ('归属于母公司所有者的净利润单季', '归属于母公司所有者的净利润(万元)'),
+               ('少数股东损益单季', '少数股东损益(万元)'),
+               ('经营活动产生的现金流量净额单季', '经营活动产生的现金流量净额(万元)'),
+               ('投资活动产生的现金流量净额单季', '投资活动产生的现金流量净额(万元)'),
+               ('筹资活动产生的现金流量净额单季', '筹资活动产生的现金流量净额(万元)'),
+               ('经营活动现金流出小计单季','经营活动现金流出小计(万元)'),
+               ('经营活动现金流入小计单季','经营活动现金流入小计(万元)'),
+               ('营业税金及附加单季', '营业税金及附加(万元)'),
+               ('所得税费用单季', '所得税费用(万元)'),
                ('基本每股收益单季','基本每股收益'))
 
                
@@ -51,13 +58,13 @@ year_data = (('营业收入年化', '营业收入单季'),
 
              
 #比率指标             
-rate_data = (('ROE', '净利润年化', '所有者权益或股东权益合计万元'),
-             ('ROA', '净利润年化', '资产总计万元'),
+rate_data = (('ROE', '净利润年化', '所有者权益(或股东权益)合计(万元)'),
+             ('ROA', '净利润年化', '资产总计(万元)'),
              ('毛利率', '营业利润年化', '营业收入年化'),
              ('经营现金流净额比利润','经营活动产生的现金流量净额年化','净利润年化'),
              ('母公司利润比例', '归属于母公司所有者的净利润年化', '净利润年化'),
-             ('资产负债率', '负债合计万元', '资产总计万元'),
-             ('每股净资产','归属于母公司股东权益合计万元','实收资本或股本万元'),
+             ('资产负债率', '负债合计(万元)', '资产总计(万元)'),
+             ('每股净资产','归属于母公司股东权益合计(万元)','实收资本(或股本)(万元)'),
              ('现金流入比营业收入','经营活动现金流入小计年化','营业收入年化'))
 
 
@@ -67,9 +74,9 @@ growth_data = (('营业收入YOY', '营业收入年化'),
                ('营业利润YOY', '营业利润年化'),
                ('净利润YOY', '净利润年化'),
                ('经营活动产生的现金流量净额YOY', '经营活动产生的现金流量净额年化'),
-               ('所有者权益或股东权益合计YOY', '所有者权益或股东权益合计万元'),
-               ('资产总计YOY', '资产总计万元'),
-               ('负债合计YOY', '负债合计万元'))
+               ('所有者权益(或股东权益)合计YOY', '所有者权益(或股东权益)合计(万元)'),
+               ('资产总计YOY', '资产总计(万元)'),
+               ('负债合计YOY', '负债合计(万元)'))
 
 
 
@@ -81,12 +88,12 @@ chart1_items=('营业收入年化',
 '营业税金及附加年化')
 
 
-chart2_items=('货币资金万元',
-'期末现金及现金等价物余额万元',
-'资产总计万元',
-'负债合计万元',
-'所有者权益或股东权益合计万元',
-'存货万元')
+chart2_items=('货币资金(万元)',
+'期末现金及现金等价物余额(万元)',
+'资产总计(万元)',
+'负债合计(万元)',
+'所有者权益(或股东权益)合计(万元)',
+'存货(万元)')
 
 chart3_items=('ROE',
 'ROA',
@@ -103,110 +110,110 @@ chart4_items=('营业收入年化',
 '投资活动产生的现金流量净额年化',
 '筹资活动产生的现金流量净额年化')
 
-#'购买商品、接受劳务支付的现金万元',
-#'筹资活动现金流入小计万元',
-#'筹资活动现金流出小计万元',
-#'投资活动现金流入小计万元',
-#'投资活动现金流出小计万元',
+#'购买商品、接受劳务支付的现金(万元)',
+#'筹资活动现金流入小计(万元)',
+#'筹资活动现金流出小计(万元)',
+#'投资活动现金流入小计(万元)',
+#'投资活动现金流出小计(万元)',
 
 chart5_items=('营业收入YOY',
 '净利润YOY',
-'所有者权益或股东权益合计YOY',
+'所有者权益(或股东权益)合计YOY',
 '资产总计YOY',
 '负债合计YOY')
 
 
 #流动资产
-chart_ldzc_items=('货币资金万元',
-'结算备付金万元',
-'拆出资金万元',
-'交易性金融资产万元',
-'衍生金融资产万元',
-'应收票据万元',
-'应收账款万元',
-'预付款项万元',
-'应收保费万元',
-'应收分保账款万元',
-'应收分保合同准备金万元',
-'应收利息万元',
-'应收股利万元',
-'其他应收款万元',
-'应收出口退税万元',
-'应收补贴款万元',
-'应收保证金万元',
-'内部应收款万元',
-'买入返售金融资产万元',
-'存货万元',
-'待摊费用万元',
-'待处理流动资产损益万元',
-'一年内到期的非流动资产万元',
-'其他流动资产万元')
+chart_ldzc_items=('货币资金(万元)',
+'结算备付金(万元)',
+'拆出资金(万元)',
+'交易性金融资产(万元)',
+'衍生金融资产(万元)',
+'应收票据(万元)',
+'应收账款(万元)',
+'预付款项(万元)',
+'应收保费(万元)',
+'应收分保账款(万元)',
+'应收分保合同准备金(万元)',
+'应收利息(万元)',
+'应收股利(万元)',
+'其他应收款(万元)',
+'应收出口退税(万元)',
+'应收补贴款(万元)',
+'应收保证金(万元)',
+'内部应收款(万元)',
+'买入返售金融资产(万元)',
+'存货(万元)',
+'待摊费用(万元)',
+'待处理流动资产损益(万元)',
+'一年内到期的非流动资产(万元)',
+'其他流动资产(万元)')
 
 #非流动资产
-chart_fldzc_items=('发放贷款及垫款万元',
-'可供出售金融资产万元',
-'持有至到期投资万元',
-'长期应收款万元',
-'长期股权投资万元',
-'其他长期投资万元',
-'投资性房地产万元',
-'固定资产万元',
-'在建工程万元',
-'工程物资万元',
-'固定资产清理万元',
-'生产性生物资产万元',
-'公益性生物资产万元',
-'油气资产万元',
-'无形资产万元',
-'开发支出万元',
-'商誉万元',
-'长期待摊费用万元',
-'股权分置流通权万元',
-'递延所得税资产万元',
-'其他非流动资产万元')
+chart_fldzc_items=('发放贷款及垫款(万元)',
+'可供出售金融资产(万元)',
+'持有至到期投资(万元)',
+'长期应收款(万元)',
+'长期股权投资(万元)',
+'其他长期投资(万元)',
+'投资性房地产(万元)',
+'固定资产(万元)',
+'在建工程(万元)',
+'工程物资(万元)',
+'固定资产清理(万元)',
+'生产性生物资产(万元)',
+'公益性生物资产(万元)',
+'油气资产(万元)',
+'无形资产(万元)',
+'开发支出(万元)',
+'商誉(万元)',
+'长期待摊费用(万元)',
+'股权分置流通权(万元)',
+'递延所得税资产(万元)',
+'其他非流动资产(万元)')
 
 #非流动负债
-chart_ldfz_items=('短期借款万元',
-'向中央银行借款万元',
-'吸收存款及同业存放万元',
-'拆入资金万元',
-'交易性金融负债万元',
-'衍生金融负债万元',
-'应付票据万元',
-'应付账款万元',
-'预收账款万元',
-'卖出回购金融资产款万元',
-'应付手续费及佣金万元',
-'应付职工薪酬万元',
-'应交税费万元',
-'应付利息万元',
-'应付股利万元',
-'其他应交款万元',
-'应付保证金万元',
-'内部应付款万元',
-'其他应付款万元',
-'预提费用万元',
-'预计流动负债万元',
-'应付分保账款万元',
-'保险合同准备金万元',
-'代理买卖证券款万元',
-'代理承销证券款万元',
-'国际票证结算万元',
-'国内票证结算万元',
-'递延收益万元',
-'应付短期债券万元',
-'一年内到期的非流动负债万元',
-'其他流动负债万元')
+chart_ldfz_items=('短期借款(万元)',
+'向中央银行借款(万元)',
+'吸收存款及同业存放(万元)',
+'拆入资金(万元)',
+'交易性金融负债(万元)',
+'衍生金融负债(万元)',
+'应付票据(万元)',
+'应付账款(万元)',
+'预收账款(万元)',
+'卖出回购金融资产款(万元)',
+'应付手续费及佣金(万元)',
+'应付职工薪酬(万元)',
+'应交税费(万元)',
+'应付利息(万元)',
+'应付股利(万元)',
+'其他应交款(万元)',
+'应付保证金(万元)',
+'内部应付款(万元)',
+'其他应付款(万元)',
+'预提费用(万元)',
+'预计流动负债(万元)',
+'应付分保账款(万元)',
+'保险合同准备金(万元)',
+'代理买卖证券款(万元)',
+'代理承销证券款(万元)',
+'国际票证结算(万元)',
+'国内票证结算(万元)',
+'递延收益(万元)',
+'应付短期债券(万元)',
+'一年内到期的非流动负债(万元)',
+'其他流动负债(万元)')
 
 #非流动负债
-chart_fldfz_items=('长期借款万元',
-'应付债券万元',
-'长期应付款万元',
-'专项应付款万元',
-'预计非流动负债万元',
-'长期递延收益万元',
-'递延所得税负债万元',
-'其他非流动负债万元')
+chart_fldfz_items=('长期借款(万元)',
+'应付债券(万元)',
+'长期应付款(万元)',
+'专项应付款(万元)',
+'预计非流动负债(万元)',
+'长期递延收益(万元)',
+'递延所得税负债(万元)',
+'其他非流动负债(万元)')
 
 chart_crqr_items=('流动比率',
 '速动比率',
@@ -218,73 +225,72 @@ chart_zzczb_items=('本公司账户类现金与总资产比值',
 '非本公司账户类现金与总资产比值')
 
 #所有收入
-chart_earning_items=('营业收入万元',
-'利息收入万元',
-'已赚保费万元',
-'手续费及佣金收入万元',
-'房地产销售收入万元',
-'其他业务收入万元',
-'公允价值变动收益万元',
-'投资收益万元',
-'对联营企业和合营企业的投资收益万元',
-'汇兑收益万元',
-'期货损益万元',
-'托管收益万元',
-'补贴收入万元',
-'其他业务利润万元')
+chart_earning_items=('营业收入(万元)',
+'利息收入(万元)',
+'已赚保费(万元)',
+'手续费及佣金收入(万元)',
+'房地产销售收入(万元)',
+'其他业务收入(万元)',
+'公允价值变动收益(万元)',
+'投资收益(万元)',
+'对联营企业和合营企业的投资收益(万元)',
+'汇兑收益(万元)',
+'期货损益(万元)',
+'托管收益(万元)',
+'补贴收入(万元)',
+'其他业务利润(万元)')
 
 #所有成本
-chart_cost_items=('营业成本万元',
-'利息支出万元',
-'手续费及佣金支出万元',
-'房地产销售成本万元',
-'研发费用万元',
-'退保金万元',
-'赔付支出净额万元',
-'提取保险合同准备金净额万元',
-'保单红利支出万元',
-'分保费用万元',
-'其他业务成本万元',
-'营业税金及附加万元',
-'销售费用万元',
-'管理费用万元',
-'财务费用万元',
-'资产减值损失万元')
+chart_cost_items=('营业成本(万元)',
+'利息支出(万元)',
+'手续费及佣金支出(万元)',
+'房地产销售成本(万元)',
+'研发费用(万元)',
+'退保金(万元)',
+'赔付支出净额(万元)',
+'提取保险合同准备金净额(万元)',
+'保单红利支出(万元)',
+'分保费用(万元)',
+'其他业务成本(万元)',
+'营业税金及附加(万元)',
+'销售费用(万元)',
+'管理费用(万元)',
+'财务费用(万元)',
+'资产减值损失(万元)')
 
 #利润
-chart_profit_items=('营业利润万元',
-'营业外收入万元',
-'营业外支出万元',
-'非流动资产处置损失万元',
-'利润总额万元',
-'所得税费用万元',
-'未确认投资损失万元',
-'净利润万元',
-'归属于母公司所有者的净利润万元')
+chart_profit_items=('营业利润(万元)',
+'营业外收入(万元)',
+'营业外支出(万元)',
+'非流动资产处置损失(万元)',
+'利润总额(万元)',
+'所得税费用(万元)',
+'未确认投资损失(万元)',
+'净利润(万元)',
+'归属于母公司所有者的净利润(万元)')
 
 
 input_dir = "/stockdata/163/"
-output_dir = "/stockdata/163bigtable/"
-save_dir = "/stockdata/163save/"
+output_dir = u"/stockdata/163bigtable/"
+save_dir = u"/stockdata/163save/"
 wholemarket_dir = "/stockdata/"
-db_file = '/stockdata/stock.db'
-
+db_file = '/code/stock/stock.db'
 
 input_cwbbzy_template1 = input_dir + "cwbbzy_%s.csv"
 input_lrb_template1 = input_dir + "lrb_%s.csv"
 input_zcfzb_template1 = input_dir + "zcfzb_%s.csv"
 input_xjllb_template1 = input_dir + "xjllb_%s.csv"
 
-save_lrb_template1 = save_dir + "%s%s利润表.csv"
-save_zcfzb_template1 = save_dir + "%s%s资产负债表.csv"
-save_xjllb_template1 = save_dir + "%s%s现金流量表.csv"
-save_cwbbzy_template1 = save_dir + "%s%s简表.csv"
+save_lrb_template1 = save_dir + u"%s%s利润表.csv"
+save_zcfzb_template1 = save_dir + u"%s%s资产负债表.csv"
+save_xjllb_template1 = save_dir + u"%s%s现金流量表.csv"
+save_cwbbzy_template1 = save_dir + u"%s%s简表.csv"
 
-output_bigdata_template = output_dir + "%s%s.csv"
-output_pic1_template = output_dir + "%s%s汇总图.jpg"
-zcfzb_pic_template = output_dir + "%s%s资产负债图.jpg"
-lrb_pic_template = output_dir + "%s%s利润图.jpg"
-xjllb_pic_template = output_dir + "%s%s现金流量图.jpg"
+output_bigdata_template = output_dir + u"%s%s.csv"
+output_pic1_template = output_dir + u"%s%s汇总图.jpg"
+zcfzb_pic_template = output_dir + u"%s%s资产负债图.jpg"
+lrb_pic_template = output_dir + u"%s%s利润图.jpg"
+xjllb_pic_template = output_dir + u"%s%s现金流量图.jpg"
 
 wholemarket_filename = wholemarket_dir + "wholemarket.csv"
 
@@ -333,6 +339,9 @@ def cal_year_data(stock_data,latest_season, oldest_season, new_column, old_colum
     
 def cal_rate_data(stock_data,latest_season, oldest_season, new_column, dividend, divisor):
     print("processing ", new_column, dividend, divisor)
+    print(divisor)
+    print(divisor.decode().encode('utf-8'))
+    
     for s in range(latest_season, oldest_season + 4, -1):
         try:
             #mydividend = float(stock_data.loc[s, dividend])
@@ -375,7 +384,7 @@ def cal_XR_factor(stock_data,latest_season, oldest_season):
 
     
 def stock_process(stock_string,stock_name):
-
+    print(stock_string,stock_name)
     #处理从163下载的原始文件，计算三个表的补充指标
     #cwbbzy_filename = input_cwbbzy_template1 % (stock_string)
     lrb_filename = input_lrb_template1 % (stock_string)
@@ -391,17 +400,16 @@ def stock_process(stock_string,stock_name):
     lrb_pic_filename = lrb_pic_template % (stock_string,stock_name)
     xjllb_pic_filename = xjllb_pic_template % (stock_string,stock_name)
     
-
-
     
     lrb = read_df(lrb_filename)
     lrb = lrb.replace("\s*--\s*", 0, regex=True)
     #relpace character --
     lrb = lrb.astype('float')
-    #lrb['毛利率'] = lrb['营业利润万元'] / lrb['营业总收入万元']
-    lrb['code'] = stock_string
-    lrb['name'] = stock_name
-    lrb.to_csv(lrb_savefile)
+    #lrb['毛利率'] = lrb['营业利润(万元)'] / lrb['营业总收入(万元)']
+    lrb['code'] = stock_string.encode('utf-8')
+    lrb['name'] = stock_name.encode('utf-8')
+    print(lrb_savefile)
+    lrb.to_csv(lrb_savefile.encode('utf-8'))
     lrb = lrb.sort_index(ascending=True)
     lrb.to_sql('lrb', con=conn, if_exists='append')
 
@@ -411,31 +419,21 @@ def stock_process(stock_string,stock_name):
     xjllb = xjllb.replace("\s*--\s*", 0, regex=True)
     #relpace character --
     xjllb = xjllb.astype('float')
-    xjllb['code'] = stock_string
-    xjllb['name'] = stock_name
-    xjllb.to_csv(xjllb_savefile)
+    xjllb['code'] = stock_string.encode('utf-8')
+    xjllb['name'] = stock_name.encode('utf-8')
+    xjllb.to_csv(xjllb_savefile.encode('utf-8'))
     xjllb = xjllb.sort_index(ascending=True)
     xjllb.to_sql('xjllb', con=conn, if_exists='append')
         
     zcfzb = read_df(zcfzb_filename)
     zcfzb = zcfzb.replace("\s*--\s*", 0, regex=True)
     zcfzb = zcfzb.astype('float')
-    #zcfzb['资产负债率'] = zcfzb['负债合计万元'] / zcfzb['资产总计万元']
-    #zcfzb['产权比率'] = zcfzb['负债合计万元'] / zcfzb['所有者权益或股东权益合计万元']
-    #zcfzb['有形净值债务率'] = zcfzb['负债合计万元'] / (zcfzb['所有者权益或股东权益合计万元'] - zcfzb['无形资产万元'])
-    #zcfzb['流动比率'] = zcfzb['流动资产合计万元'] / zcfzb['流动负债合计万元'] 
-    #zcfzb['速动比率'] = (zcfzb['流动资产合计万元'] - zcfzb['存货万元'] ) / zcfzb['流动负债合计万元'] 
-    #zcfzb['保守速动比率'] = (zcfzb['货币资金万元'] + zcfzb['交易性金融资产万元'] + zcfzb['应收票据万元'] + zcfzb['应收账款万元']) / zcfzb['流动负债合计万元'] 
-    #zcfzb['本公司账户类现金与总资产比值'] = (zcfzb['货币资金万元'] + zcfzb['交易性金融资产万元'] + zcfzb['衍生金融资产万元'] + zcfzb['其他流动资产万元']) / zcfzb['资产总计万元'] 
-    #zcfzb['非本公司账户类现金与总资产比值'] = (zcfzb['应收票据万元'] + zcfzb['应收账款万元'] + zcfzb['预付款项万元'] + zcfzb['其他应收款万元']) / zcfzb['资产总计万元'] 
-    zcfzb['code'] = stock_string
-    zcfzb['name'] = stock_name
-    zcfzb.to_csv(zcfzb_savefile)
+    zcfzb['code'] = stock_string.encode('utf-8')
+    zcfzb['name'] = stock_name.encode('utf-8')
+    zcfzb.to_csv(zcfzb_savefile.encode('utf-8'))
     zcfzb = zcfzb.sort_index(ascending=True) 
     zcfzb.to_sql('zcfzb', con=conn, if_exists='append')    
 
-    cur.close()
-    conn.close()
 
    
 
@@ -446,30 +444,33 @@ def formula_cal(stock_string,stock_name):
     
 
     query = "SELECT * from lrb where code ='" + stock_string + "';"
+    print(query)
     lrb = pd.read_sql_query(query,conn)
     lrb = lrb.set_index(lrb['index'])
-    del lrb['level_0']
+    #del lrb['level_0']
     del lrb['code']
     del lrb['name']
     del lrb['index']
     print(lrb.count())
+    a=lrb.columns
     
     query = "SELECT * from xjllb where code ='" + stock_string + "';"
+    print(query)
     xjllb = pd.read_sql_query(query,conn)
     xjllb = xjllb.set_index(xjllb['index'])
-    del xjllb['level_0']
+
     del xjllb['code']
     del xjllb['name']
     del xjllb['index']
-    del xjllb['财务费用万元']
-    del xjllb['净利润万元']
-    del xjllb['少数股东损益万元']
+    del xjllb['财务费用(万元)']
+    del xjllb['净利润(万元)']
+    del xjllb['少数股东损益(万元)']
     print(xjllb.count())
  
     query = "SELECT * from zcfzb where code ='" + stock_string + "';"
+    print(query)
     zcfzb = pd.read_sql_query(query,conn)
     zcfzb = zcfzb.set_index(zcfzb['index'])
-    del zcfzb['level_0']
     print(zcfzb.count())
 
     stock_data = zcfzb.copy()
@@ -478,23 +479,23 @@ def formula_cal(stock_string,stock_name):
     #以上代码用于三表合一
     
     
-    stock_data['毛利率'] = stock_data['营业利润万元'] / stock_data['营业总收入万元']
-    stock_data['资产负债率'] = stock_data['负债合计万元'] / stock_data['资产总计万元']
-    stock_data['产权比率'] = stock_data['负债合计万元'] / stock_data['所有者权益或股东权益合计万元']
-    stock_data['有形净值债务率'] = stock_data['负债合计万元'] / (stock_data['所有者权益或股东权益合计万元'] - stock_data['无形资产万元'])
-    stock_data['流动比率'] = stock_data['流动资产合计万元'] / stock_data['流动负债合计万元'] 
-    stock_data['速动比率'] = (stock_data['流动资产合计万元'] - stock_data['存货万元'] ) / stock_data['流动负债合计万元'] 
-    stock_data['保守速动比率'] = (stock_data['货币资金万元'] + stock_data['交易性金融资产万元'] + stock_data['应收票据万元'] + stock_data['应收账款万元']) / stock_data['流动负债合计万元'] 
-    stock_data['本公司账户类现金与总资产比值'] = (stock_data['货币资金万元'] + stock_data['交易性金融资产万元'] + stock_data['衍生金融资产万元'] + stock_data['其他流动资产万元']) / stock_data['资产总计万元'] 
-    stock_data['非本公司账户类现金与总资产比值'] = (stock_data['应收票据万元'] + stock_data['应收账款万元'] + stock_data['预付款项万元'] + stock_data['其他应收款万元']) / stock_data['资产总计万元'] 
+    stock_data['毛利率'] = stock_data['营业利润(万元)'] / stock_data['营业总收入(万元)']
+    stock_data['资产负债率'] = stock_data['负债合计(万元)'] / stock_data['资产总计(万元)']
+    stock_data['产权比率'] = stock_data['负债合计(万元)'] / stock_data['所有者权益(或股东权益)合计(万元)']
+    stock_data['有形净值债务率'] = stock_data['负债合计(万元)'] / (stock_data['所有者权益(或股东权益)合计(万元)'] - stock_data['无形资产(万元)'])
+    stock_data['流动比率'] = stock_data['流动资产合计(万元)'] / stock_data['流动负债合计(万元)'] 
+    stock_data['速动比率'] = (stock_data['流动资产合计(万元)'] - stock_data['存货(万元)'] ) / stock_data['流动负债合计(万元)'] 
+    stock_data['保守速动比率'] = (stock_data['货币资金(万元)'] + stock_data['交易性金融资产(万元)'] + stock_data['应收票据(万元)'] + stock_data['应收账款(万元)']) / stock_data['流动负债合计(万元)'] 
+    stock_data['本公司账户类现金与总资产比值'] = (stock_data['货币资金(万元)'] + stock_data['交易性金融资产(万元)'] + stock_data['衍生金融资产(万元)'] + stock_data['其他流动资产(万元)']) / stock_data['资产总计(万元)'] 
+    stock_data['非本公司账户类现金与总资产比值'] = (stock_data['应收票据(万元)'] + stock_data['应收账款(万元)'] + stock_data['预付款项(万元)'] + stock_data['其他应收款(万元)']) / stock_data['资产总计(万元)'] 
 
     
    
 
-    print(stock_data['营业收入万元'])
+    print(stock_data['营业收入(万元)'])
     
     # derive year and month, write index
-    stock_data = stock_data[stock_data['营业收入万元'].notnull() ]
+    stock_data = stock_data[stock_data['营业收入(万元)'].notnull() ]
     #处理原始文件中的异常：存在行，但逗号之间都为空值
     #print(stock_data)
     stock_data['date'] = stock_data.index
@@ -523,58 +524,68 @@ def formula_cal(stock_string,stock_name):
     latest_season = stock_data['seq'].max()
     print ( "oldest_season:", oldest_season, "  latest_season:", latest_season)
 
-    if oldest_season >= latest_season:
-        #无法形成单季数据，结束！
-        #stock_data.to_csv(bigdata_filename)
-        return empty
-	
-    # 计算单季数据
-    for indicators in season_data:
-        new_column = indicators[0]
-        old_column = indicators[1]
-        print ("creating ",new_column , 'by ', old_column)
-        stock_data = cal_season_data(stock_data,latest_season, oldest_season, new_column, old_column)
+    if oldest_season < latest_season:
+        #可以形成单季数据，计算单季数据
+        for indicators in season_data:
+            new_column = indicators[0]
+            old_column = indicators[1]
+            print ("creating  %s by %s" % (new_column , old_column))
+            stock_data = cal_season_data(stock_data,latest_season, oldest_season, new_column, old_column)
 
-    if oldest_season +4 >= latest_season:
-        #无法形成年化数据，结束！
-        #stock_data.to_csv(bigdata_filename)
-        return empty
-
-    # 计算年化数据
-    for indicators in year_data:
-        new_column = indicators[0]
-        old_column = indicators[1]
-        print ("creating ",new_column , 'by ', old_column)
-        stock_data = cal_year_data(stock_data, latest_season, oldest_season, new_column, old_column)
-    
-    # 计算比率数据
-    for indicators in rate_data:
-        new_column = indicators[0]
-        dividend = indicators[1]
-        divisor = indicators[2]
-        print ("creating ", new_column, 'by ', dividend, divisor)
-        stock_data = cal_rate_data(stock_data,latest_season, oldest_season, new_column, dividend, divisor)
-
-    if oldest_season +8 >= latest_season:
-        #无法形成增长数据
-        #stock_data.to_csv(bigdata_filename)
-        return empty
+    if oldest_season +4 < latest_season:
+        #可以形成年化数据，计算年化数据
+        for indicators in year_data:
+            new_column = indicators[0]
+            old_column = indicators[1]
+            print ("creating %s by %s" %( new_column, old_column))
+            stock_data = cal_year_data(stock_data, latest_season, oldest_season, new_column, old_column)
         
-    # 计算增长数据
-    for indicators in growth_data:
-        new_column = indicators[0]
-        old_column = indicators[1]
-        print ("creating ", new_column , 'by ', old_column)
-        stock_data = cal_growth_data(stock_data,latest_season, oldest_season, new_column, old_column)
-    
+        # 计算比率数据
+        for indicators in rate_data:
+            new_column = indicators[0]
+            dividend = indicators[1]
+            divisor = indicators[2]
+            print ("creating  %s by %s and %s " % ( new_column, dividend, divisor))
+            stock_data = cal_rate_data(stock_data,latest_season, oldest_season, new_column, dividend, divisor)
 
-    
+    if oldest_season +8 < latest_season:
+        #可以形成增长数据，计算增长数据
+        for indicators in growth_data:
+            new_column = indicators[0]
+            old_column = indicators[1]
+            print ("creating %s by %s" %( new_column , old_column))
+            stock_data = cal_growth_data(stock_data,latest_season, oldest_season, new_column, old_column)
+
     del stock_data['seq']
-    print(list(stock_data.columns))
+    #print(list(stock_data.columns))
 
     stock_data.to_sql('stock', con=conn, if_exists='append')
     print("save to db!")
  
+ 
+def preparefor_update():
+    #alter table name in sqlite
+    conn=lite.connect(db_file)
+    cur = conn.cursor()
+
+    try:
+        cur.execute('alter table lrb rename to lrb_old;')
+    except:
+        print('rename lrb fail.')
+        
+    try:
+        cur.execute('alter table xjllb rename to xjllb_old;')
+    except:
+        print('rename xjllb fail.')
+
+    try:
+        cur.execute('alter table zcfzb rename to zcfzb_old;')
+    except:
+        print('rename zcfzb fail.')
+
+    cur.close()
+    conn.close()
+
 
 '''这部分是第一次入库用
 conn=lite.connect(db_file)
@@ -598,36 +609,43 @@ except:
 cur.close()
 conn.close()''' 
 
-#action = 'process data'
+
+#action = 'prepare'
+#action = 'process_data'
 action = 'formula_cal'
 #开关变变量，觉得处理文件，还是计算指标
 
+if action == 'prepare':
+    preparefor_update()
 
-db_file = '/code/stock/stock.db'
-
-conn=lite.connect(db_file)
-conn.text_factory = lambda x: unicode(x, 'utf-8', 'ignore')
-#allow chinese character in database
-cur = conn.cursor()
-
-sql = "select * from stocklist"
-stock_list = pd.read_sql_query(sql, conn)
-
+else:
+    conn=lite.connect(db_file)
+    conn.text_factory = lambda x: unicode(x, 'utf-8', 'ignore')
+    #allow chinese character in database
+    cur = conn.cursor()
     
-for i in stock_list.index:
-    stock, stock_name = stock_list.ix[i, 'code'], stock_list.ix[i, 'name']
-    #已修正 stock_name = stock_name.replace('*','')
-    #已修正 stock_string = str(stock).zfill(6)
-    print(action, stock_string, stock_name)
-
-    #读取并处理163原始文件
-    if action == 'process data':
-        stock_process(stock_string,stock_name)
-
-    #合并计算指标
-    elif action == 'formula_cal':
-        formula_cal(stock_string,stock_name)
-
-
-cur.close()
-conn.close()
+    sql = "select * from stocklist order by code;"
+    stock_list = pd.read_sql_query(sql, conn)
+    
+        
+    for i in stock_list.index:
+        stock = stock_list.ix[i, 'code']
+        stock_name = stock_list.ix[i, 'name']
+        #已修正 stock_name = stock_name.replace('*','')
+        #已修正 stock_string = str(stock).zfill(6)
+        print(action, stock, stock_name)
+    
+        #读取并处理163原始文件
+        if action == 'process_data':
+            stock_process(stock,stock_name)
+    
+        #合并计算指标
+        elif action == 'formula_cal':
+            formula_cal(stock,stock_name)
+    
+        elif action == 'prepare':
+            preparefor_update()
+    
+    cur.close()
+    conn.close()
+    

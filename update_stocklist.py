@@ -35,27 +35,27 @@ print(delta_o_n)
 
 try:
     cur.execute('drop index stocklist_old;')
-else:
+except:
     print('drop index stocklist_old fail')
     
 try:
     cur.execute('drop table stocklist_old;')
-else:
+except:
     print('drop table stocklist_old fail')
     
 try:
     cur.execute('alter table stocklist rename to stocklist_old;')
-else:
+except:
     print('alter table stocklist rename fail')
     
 try:
     cur.execute('drop index stocklist;')
-else:
+except:
     print('drop index stocklist fail')
     
 try:
     newlist.to_sql('stocklist', con=conn, if_exists='append')
-else:
+except:
     print('insert stocklist fail')
     
 conn.close()
