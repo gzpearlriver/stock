@@ -18,9 +18,9 @@ import sqlite3 as lite
 import matplotlib.pyplot as plt
 import pathlib
 
-#from pylab import mpl
-#mpl.rcParams['font.sans-serif'] = ['FangSong']  # 指定默认字体
-#mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显示为方块的问题
+from pylab import mpl
+mpl.rcParams['font.sans-serif'] = ['FangSong']  # 指定默认字体
+mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显示为方块的问题
 
 chart_income_items=('营业收入年化',
 '营业利润年化',
@@ -230,7 +230,7 @@ def n_ticks(index,n):
 
 
 def draw_scatter(title, horizon_source, vertical_source):
-    pic_filename = pic_dir  + title + '.jpg'
+    pic_filename = pic_dir  + title + '.png'
     fig1 = plt.figure()
     fig1.set_size_inches(12, 8 * 1)
     
@@ -255,7 +255,7 @@ def draw_scatter(title, horizon_source, vertical_source):
     plt.close('all')
 
 def draw_kmonth(title,left_source,right_source,index):
-    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.jpg'
+    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.png'
     fig1 = plt.figure()
     fig1.set_size_inches(12, 8 * 1)
     
@@ -312,7 +312,7 @@ def versus(stock_code , stock_name):
 
 
 def draw_multiline(title, chart_items,stock_data):
-    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.jpg'
+    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.png'
     fig1 = plt.figure()
     fig1.set_size_inches(12, 8 * 1)
     ax1 = fig1.add_subplot(111)  
@@ -336,7 +336,7 @@ def draw_multiline(title, chart_items,stock_data):
     
 
 def draw_stack(title, chart_items, stock_data):
-    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.jpg'
+    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.png'
     fig1 = plt.figure()
     fig1.set_size_inches(12, 8 * 1)
     
@@ -379,7 +379,9 @@ def finance_report(stock_code , stock_name):
     onestock = pd.read_sql_query(query,conn)
     #print(onestock.columns)
     #print(len(onestock))
-    
+    csv_filename = stock_dir + "/" + stock_code + stock_name + '.csv'
+    onestock.to_csv(csv_filename,encoding='utf_8_sig')
+     
     draw_stack('流动资产', chart_ldzc_items, onestock)
     draw_stack('非流动资产', chart_fldzc_items, onestock)
     draw_stack('流动负债', chart_ldfz_items, onestock)
@@ -400,14 +402,15 @@ def finance_report(stock_code , stock_name):
 
 
 #main program begin here    
-db_file = '/code/stock/stock.db'
-pic_dir = '/stockdata/pic/'
-
+#db_file = '/code/stock/stock.db'
+#pic_dir = '/stockdata/pic/'
+db_file = 'D:\\stockdata\\stock.db'
+pic_dir = 'D:\\stockdata\\pic\\'
 conn=lite.connect(db_file)
 cur = conn.cursor()
 
-stock_name='东方园林'
-stock_code='002310'
+stock_name='安道麦'
+stock_code='000553'
 stock_dir=pic_dir + stock_code + stock_name
 
 #versus(stock_code , stock_name)
