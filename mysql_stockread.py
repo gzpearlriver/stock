@@ -35,7 +35,7 @@ input_zcfzb_template1 = input_dir + "zcfzb_%s.csv"
 input_xjllb_template1 = input_dir + "xjllb_%s.csv"
 
 #自定义指标
-col_data  = (('工业利润自定义', (['营业总收入(万元)']), (['营业总成本(万元)','利息支出(万元)','研发费用(万元)','其他业务成本(万元)','营业税金及附加(万元)','销售费用(万元)','管理费用(万元)','财务费用(万元)','资产减值损失(万元)'])),)
+col_data  = (('工业利润自定义', (['营业总收入(万元)']), (['营业成本(万元)','利息支出(万元)','研发费用(万元)','其他业务成本(万元)','营业税金及附加(万元)','销售费用(万元)','管理费用(万元)','财务费用(万元)','资产减值损失(万元)'])),)
 
 
 #季度化指标
@@ -43,6 +43,7 @@ season_data = (('营业总收入单季', '营业总收入(万元)'),
                ('营业总成本单季', '营业总成本(万元)'),
                ('利润总额单季', '利润总额(万元)'),
                ('净利润单季', '净利润(万元)'),
+               ('工业利润自定义单季', '工业利润自定义'),
                ('归属于母公司所有者的净利润单季', '归属于母公司所有者的净利润(万元)'),
                ('少数股东损益单季', '少数股东损益(万元)'),
                ('经营活动产生的现金流量净额单季', '经营活动产生的现金流量净额(万元)'),
@@ -60,6 +61,7 @@ year_data = (('营业总收入年化', '营业总收入单季'),
              ('营业总成本年化', '营业总成本单季'),
              ('利润总额年化', '利润总额单季'),
              ('净利润年化', '净利润单季'),
+             ('工业利润自定义年化', '工业利润自定义单季'),
              ('归属于母公司所有者的净利润年化', '归属于母公司所有者的净利润单季'),
              ('少数股东损益年化', '少数股东损益单季'),
              ('经营活动产生的现金流量净额年化', '经营活动产生的现金流量净额单季'),
@@ -85,17 +87,19 @@ rate_data = (('ROE(年化)', (['净利润年化']), (), (['所有者权益(或�
              ('每股净资产',(['归属于母公司股东权益合计(万元)']), (), (['实收资本(或股本)(万元)']), () ),
 
              ('资产负债率', (['负债合计(万元)']), (), (['资产总计(万元)']), () ),
+             ('本公司账户类现金与总资产比值', (['货币资金(万元)', '交易性金融资产(万元)', '衍生金融资产(万元)', '其他流动资产(万元)']) , () ,(['资产总计(万元)']), () ), 
+             ('非本公司账户类现金与总资产比值', (['应收票据(万元)','应收账款(万元)','预付款项(万元)', '其他应收款(万元)']), () , (['资产总计(万元)']), () ),
+             ('存货与总资产比值', (['存货(万元)']), () , (['资产总计(万元)']), () ) ,
+
              ('现金流入比营业收入(年化)',(['经营活动现金流入小计年化']), (), (['营业总收入年化']), () ),
              ('产权比率',(['负债合计(万元)']), (), (['所有者权益(或股东权益)合计(万元)']), () ),
              ('有形净值债务率', (['负债合计(万元)']), (),  (['所有者权益(或股东权益)合计(万元)']), (['无形资产(万元)'])),
              ('流动比率' ,(['流动资产合计(万元)']), () ,(['流动负债合计(万元)']), () ), 
              ('速动比率', (['流动资产合计(万元)']), (['存货(万元)']), (['流动负债合计(万元)']), () ), 
-             ('保守速动比率', (['货币资金(万元)', '交易性金融资产(万元)', '应收票据(万元)', '应收账款(万元)']), () ,(['流动负债合计(万元)']), () ),
-             ('本公司账户类现金与总资产比值', (['货币资金(万元)', '交易性金融资产(万元)', '衍生金融资产(万元)', '其他流动资产(万元)']) , () ,(['资产总计(万元)']), () ), 
-             ('非本公司账户类现金与总资产比值', (['应收票据(万元)','应收账款(万元)','预付款项(万元)', '其他应收款(万元)']), () , (['资产总计(万元)']), () )) 
+             ('保守速动比率', (['货币资金(万元)', '交易性金融资产(万元)', '应收票据(万元)', '应收账款(万元)']), () ,(['流动负债合计(万元)']), () ))
              
 #ROE 净资产收益率=净利润*2/（本年期初净资产+本年期末净资产）  
-#营业利润和净利润有误导成分，经营利润（自制指标）和现金流更加有意义           
+#营业利润和净利润有误导成分，工业利润（自制指标）和现金流更加有意义           
 
 #增长率指标
 growth_data = (('营业总收入YOY', '营业总收入年化'),
@@ -497,20 +501,20 @@ def stockdata_process(op='routine_update'):
     #op = force_update , means stockdata is already there and update every stock
     #op = change_col , means create stockdata from stockdata_old
     
-    if op == 'rebuild' or op == 'change_col':
+    if op == 'rebuild' or op == 'change_col_phase2':
         try:
-            stmt= sqlalchemy.text('drop table distinct_code;')
+            stmt= sqlalchemy.text('delete from distinct_code;')
             conn_mysql.execute(stmt)
-            print('dropping table distinct_code')
+            print('delete from distinct_code;  success!')
         except:
-            print('dropping fail. no such table distinct_code')
+            print('deleteing failed!')
             
         try:
-            stmt= sqlalchemy.text('create table distinct_code  select distinct code as dcode from stockdata;')
+            stmt= sqlalchemy.text('insert into distinct_code  select distinct code as dcode from stockdata;')
             conn_mysql.execute(stmt)
-            print('create table distinct_code')
+            print('updating table distinct_code succeded! ')
         except:
-            print('fail to create distinct_code')   
+            print('fail to update distinct_code!')   
         sql = "select * from stocklist a where not exists ( select dcode from distinct_code b  where b.dcode = a.code ) order by code"
         #very important solution for "not in"
     else:
@@ -551,13 +555,10 @@ def stockdata_process(op='routine_update'):
                 print("163 file already exist", code, name)
                 errcode = 0
         
-        elif op == 'change_col':
+        elif op == 'change_col_phase1' or op == 'change_col_phase2' :        
             print("change columns %s %s." %(code,name))
             #data is at database, table is called stockdata_old
-            '''elif op == 'change_col' and  today ==  lastread163 :
-            print("already change columns recently. skip!")
-            continue
-            '''
+
         else:
             print("other cases. skip")
             continue
@@ -592,7 +593,10 @@ def stockdata_process(op='routine_update'):
                 s = mylist.update().where(mylist.c.code == code).values(lastread163=today)
             conn_mysql.execute(s)
 
-        elif op == 'change_col' :            
+        elif op == 'change_col_phase1' or op == 'change_col_phase2' :
+            #列更新的特别之处是数据来源为 stockdata_old，而stockdata是从空表开始建立
+            #phase1是正常从空表开始建立，phase2是phase1异常中断后的接力，略过所有已经重建的股票。
+
             sql = "select * from stockdata_old where code = %s" % code
             print(sql)
             data = pd.read_sql_query(sql, conn_mysql)
@@ -601,8 +605,9 @@ def stockdata_process(op='routine_update'):
             #print(len(data))
             #print(data.columns)
             if len(data) == 0:
+                #use data from stockdata_old as many as possible. read form csv file otherwise.
                 print("read data from 163 file", code, name)
-            data = read_163file(code,name)
+                data = read_163file(code,name)
             errcode, data = cal_indicator(data)
             print("calculate indicators error: " , errcode)
             if errcode == 0 or errcode == 3:
@@ -629,7 +634,7 @@ month = today.month
 seq_today = year * 4 + month // 4
 print("seq_today=",seq_today)
 
-stockdata_process(op='change_col')
+stockdata_process(op='change_col_phase1')
 
 #data = read_163file('000002','wk')
 #errcode,  data = cal_indicator(data)
