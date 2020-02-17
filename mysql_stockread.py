@@ -74,11 +74,12 @@ year_data = (('营业总收入年化', '营业总收入单季'),
              ('基本每股收益年化','基本每股收益单季'))
 
 
-             
 #比率指标 
-#格式：指标，            
+#格式：new_column = （dividend_add_list - dividend_minus_list) / ( divisor_add_list -divisor_minus_list)
 rate_data = (('ROE(年化)', (['净利润年化']), (), (['所有者权益(或股东权益)合计(万元)']),() ),
              ('ROA(年化)', (['净利润年化']), (), (['资产总计(万元)']),() ),
+             ('CFOE(年化)', (['经营现金流净额比利润(年化)']), (), (['所有者权益(或股东权益)合计(万元)']),() ),
+             ('CFOA(年化)', (['经营现金流净额比利润(年化)']), (), (['资产总计(万元)']),() ),
              ('毛利率', (['利润总额(万元)']), (), (['营业总收入(万元)']), () ),
              ('毛利率(年化)', (['利润总额年化']), (), (['营业总收入年化']), () ),
              ('经营现金流净额比利润(年化)',(['经营活动产生的现金流量净额年化']), (), (['净利润年化']), () ),
@@ -89,15 +90,22 @@ rate_data = (('ROE(年化)', (['净利润年化']), (), (['所有者权益(或�
              ('资产负债率', (['负债合计(万元)']), (), (['资产总计(万元)']), () ),
              ('本公司账户类现金与总资产比值', (['货币资金(万元)', '交易性金融资产(万元)', '衍生金融资产(万元)', '其他流动资产(万元)']) , () ,(['资产总计(万元)']), () ), 
              ('非本公司账户类现金与总资产比值', (['应收票据(万元)','应收账款(万元)','预付款项(万元)', '其他应收款(万元)']), () , (['资产总计(万元)']), () ),
+             ('流动资产与总资产比值', (['流动资产合计(万元)']), () , (['资产总计(万元)']), () ) ,
              ('存货与总资产比值', (['存货(万元)']), () , (['资产总计(万元)']), () ) ,
+             ('货币与总资产比值', (['货币资金(万元)']), () , (['资产总计(万元)']), () ) ,
 
              ('现金流入比营业收入(年化)',(['经营活动现金流入小计年化']), (), (['营业总收入年化']), () ),
+             ('经营现金流入与总负债比值',(['流动资产合计(万元)']), (), (['负债合计(万元)']), () ),
+             ('经营现金流量净额与流动负债比值',(['经营活动产生的现金流量净额年化']), (), (['流动负债合计(万元)']), () ),
+             
              ('产权比率',(['负债合计(万元)']), (), (['所有者权益(或股东权益)合计(万元)']), () ),
              ('有形净值债务率', (['负债合计(万元)']), (),  (['所有者权益(或股东权益)合计(万元)']), (['无形资产(万元)'])),
              ('流动比率' ,(['流动资产合计(万元)']), () ,(['流动负债合计(万元)']), () ), 
              ('速动比率', (['流动资产合计(万元)']), (['存货(万元)']), (['流动负债合计(万元)']), () ), 
              ('保守速动比率', (['货币资金(万元)', '交易性金融资产(万元)', '应收票据(万元)', '应收账款(万元)']), () ,(['流动负债合计(万元)']), () ))
-             
+
+
+       
 #ROE 净资产收益率=净利润*2/（本年期初净资产+本年期末净资产）  
 #营业利润和净利润有误导成分，工业利润（自制指标）和现金流更加有意义           
 
@@ -169,9 +177,14 @@ def cal_col_data(stock_data,latest_season, oldest_season, new_column, addends, s
     for s in range(latest_season, oldest_season , -1):
         result = 0
         for col in addends:
+            #print(result,col)
+            #print(stock_data.loc[s, col])
             result = result + stock_data.loc[s, col]
         for col in subtrahends:
+            #print(result,col)
+            #print(stock_data.loc[s, col])
             result = result - stock_data.loc[s, col]
+        print("seq,column name,result",s,new_column,result)
         stock_data.loc[s, new_column] = result
     return stock_data
     
@@ -497,8 +510,12 @@ def update_database(code,name,new_data,table,op='addnewonly'):
 def stockdata_process(op='routine_update'):
     #op = create , means no stockdata at all, maybe new columns will be intruduced
     #op = rebuild , stockdata is already there, but most data are missed
-    #op = routine_update , means stockdata is already there and just needs update 
     #op = force_update , means stockdata is already there and update every stock
+
+    #日常更新 
+    #op = routine_update , means stockdata is already there and just needs update 
+
+    #更改列，增加指标。需要首先把表改为stockdata_old，然后重新计算指标，插回stockdata中
     #op = change_col , means create stockdata from stockdata_old
     
     if op == 'rebuild' or op == 'change_col_phase2':
@@ -517,7 +534,9 @@ def stockdata_process(op='routine_update'):
             print('fail to update distinct_code!')   
         sql = "select * from stocklist a where not exists ( select dcode from distinct_code b  where b.dcode = a.code ) order by code"
         #very important solution for "not in"
+        #这个sql的目标是把stocklist中减去已经存在stockdata的股票代码，只针对它们进行计算。
     else:
+        #other case, get full list of stocks from table stocklist 
         sql = "select * from stocklist order by code "
     
     print(sql)
@@ -541,10 +560,12 @@ def stockdata_process(op='routine_update'):
                 errcode = read163data(code)
 
         elif op == 'force_update' and  today ==  lastread163 :
+            #今天已经查询过163了
             print("already update recently. skip!")
             continue
             
         elif op == 'force_update' and  today >  lastread163:
+            #今天还没查询过163，继续强制更新
             path = file_template[3] % (code)
             print(path)
             if not os.path.exists(path):
@@ -557,6 +578,7 @@ def stockdata_process(op='routine_update'):
         
         elif op == 'change_col_phase1' or op == 'change_col_phase2' :        
             print("change columns %s %s." %(code,name))
+            #改变列，不需要去查询163
             #data is at database, table is called stockdata_old
 
         else:
@@ -570,9 +592,17 @@ def stockdata_process(op='routine_update'):
         
             data = read_163file(code,name)
             errcode, data = cal_indicator(data)
-            errcode, max_seq = update_database(code,name,data,'stockdata',op='addnewonly')
-            
-            print("stock process result:  ",errcode, max_seq)
+            print("calculate indicators error: " , errcode)
+
+            if errcode == 0 or errcode == 3:
+                #all right or without growth data
+                #只更新全对或仅仅缺增长数据的股票，把新指标数据插入stockdata
+                errcode, max_seq = update_database(code,name,data,'stockdata',op='addnewonly')
+                print("update database error: " , errcode)
+                
+            #计算和更新共享errcode，两个过程都是0，才更新stocklist的时间
+            #更新stocklist的时间，目的是减少短时间多少查询163
+            print("stock process result:  ",errcode)
             if errcode == 0:
                 #get 163 data successfully, update date, seq , new_stock_or_not
                 s = mylist.update().where(mylist.c.code == code).values(lastread163=today,seq=int(max_seq),new=False)
@@ -593,8 +623,8 @@ def stockdata_process(op='routine_update'):
                 s = mylist.update().where(mylist.c.code == code).values(lastread163=today)
             conn_mysql.execute(s)
 
-        elif op == 'change_col_phase1' or op == 'change_col_phase2' :
-            #列更新的特别之处是数据来源为 stockdata_old，而stockdata是从空表开始建立
+        elif op == ('change_col_phase1' or op == 'change_col_phase2') and (today >  (lastread163 + datetime.timedelta(days=2))):
+            #列更新的特别之处是数据来源为 stockdata_old！！！！  而stockdata是从空表开始建立
             #phase1是正常从空表开始建立，phase2是phase1异常中断后的接力，略过所有已经重建的股票。
 
             sql = "select * from stockdata_old where code = %s" % code
@@ -606,24 +636,49 @@ def stockdata_process(op='routine_update'):
             #print(data.columns)
             if len(data) == 0:
                 #use data from stockdata_old as many as possible. read form csv file otherwise.
-                print("read data from 163 file", code, name)
-                data = read_163file(code,name)
+                #旧数据库中没有，需要从163查询
+                #print("read data from 163 file", code, name)
+                #data = read_163file(code,name)
+                #if len(data) ==0:
+                #new solution : skip!
+                continue
+        
+            #重要一步，重新计算各种指标，实现列改变的目标
             errcode, data = cal_indicator(data)
             print("calculate indicators error: " , errcode)
+
             if errcode == 0 or errcode == 3:
-                #all ringt or without growth data
+                #all right or without growth data
+                #只更新全对或仅仅缺增长数据的股票，把新指标数据插入stockdata
                 errcode, max_seq = update_database(code,name,data,'stockdata',op='addnewonly')
                 print("update database error: " , errcode)
                 if errcode == 0:
                     s = mylist.update().where(mylist.c.code == code).values(lastread163=today)
                     print(s)
                     conn_mysql.execute(s)
+
+
+
+def change_col_prepare():
+
+    try:
+        conn_mysql.execute('drop table stockdata_old;')
+    except:
+        print('drop table stockdata_old fail')
         
-engine = sqlalchemy.create_engine("mysql+pymysql://stock:stock@104.225.154.46:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
+    try:
+        conn_mysql.execute('alter table stockdata rename to stockdata_old;')
+    except:
+        print('alter table stockdata rename fail')
+    
+
+ 
+#engine = sqlalchemy.create_engine("mysql+mysqlconnector://stock:stock@stock.riverriver.xyz:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
+#使用mysqlconnector会出现
+engine = sqlalchemy.create_engine("mysql+pymysql://stock:stock@stock.riverriver.xyz:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
 metadata = sqlalchemy.MetaData(engine)
 conn_mysql = engine.connect()
 #stockdata = sqlalchemy.Table('stockdata', metadata, autoload=True, autoload_with=engine)
-
 mylist = sqlalchemy.Table('stocklist', metadata, autoload=True, autoload_with=engine)
 
 
@@ -634,7 +689,13 @@ month = today.month
 seq_today = year * 4 + month // 4
 print("seq_today=",seq_today)
 
+#stockdata_process(op='routine_update')
+
+#change_col_prepare()
+#把stockdata变成了stockdata_old
+
 stockdata_process(op='change_col_phase1')
+
 
 #data = read_163file('000002','wk')
 #errcode,  data = cal_indicator(data)
@@ -642,3 +703,4 @@ stockdata_process(op='change_col_phase1')
     
 
 conn_mysql.close()
+

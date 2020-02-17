@@ -23,11 +23,12 @@ def update_database(code,name,new_data,table,op='addnewonly'):
     print("update database, op=",op)
     
     try:
+        #尝试获取旧数据，存入old_data
         sql = "select * from %s where code = %s ; " % (table,code)
         print(sql)
         old_data = pd.read_sql_query(sql, conn_mysql)
     except:
-        #database无此table
+        #database无此股票数据，直接插入后返回
         new_data = new_data.set_index(new_data['seq'])
         del new_data['seq']
         new_data.to_sql(table, con=conn_mysql, if_exists='append')
@@ -76,36 +77,24 @@ def update_database(code,name,new_data,table,op='addnewonly'):
     
 
 
+def update_kmonth():
 
-
-def create_kmonth():    
     table = 'kmonth'
-    try:
-        stmt= sqlalchemy.text('delete from distinct_kmonth;')
-        conn_mysql.execute(stmt)
-        print('delete from distinct_kmonth;  success!')
-    except:
-        print('deleteing failed!')
-        
-    try:
-        #stmt= sqlalchemy.text('create table distinct_kmonth select distinct code as dcode from kmonth;')
-        #用于第一次产生distinct_kmonth这个表
-        stmt= sqlalchemy.text('insert into distinct_kmonth  select distinct code as dcode from kmonth;')
-        conn_mysql.execute(stmt)
-        print('updating table distinct_kmonth succeded! ')
-    except:
-        print('fail to update distinct_kmonth!')   
+
+    sql = "select code, max(seq_season) from kmonth group by code;"
+    stock_already_exist =  pd.read_sql_query(sql, conn_mysql)
+    print(stock_already_exist)
     
-    sql = "select * from stocklist a where not exists ( select dcode from distinct_kmonth b  where b.dcode = a.code ) order by code"
+    sql = "select * from stocklist order by code"
     stocklist = pd.read_sql_query(sql, conn_mysql)
     
     for index, row in stocklist.iterrows():
         code = row['code']
         name = row['name']
-        stock_seq = row['seq']
-        lastread163 = row['lastread163']
-        #print(type(today),type(lastread163),type(datetime.timedelta(days=7)))
+     
+        #从tushare获取某个股票的月K线数据
         print("\n\n\n Now I am reading kmonth of %s %s" % (code,name))
+        
         kdata = ts.get_k_data(code, ktype='M', index=False, start='', end='', autype=None)
         if len(kdata) > 0:
             kdata['date'] = kdata['date'].str.replace('/','-')
@@ -120,9 +109,10 @@ def create_kmonth():
             kdata['seq'] = kdata['年'] * 12 + kdata['月']
             kdata['seq_season'] = kdata['年'] * 4 + kdata['季']
             #print(kdata)
+            #插入到kdata表中
             update_database(code,name,kdata,table,op='addnewonly')
-            
-def update_kmonth():
+    
+def update_kmonth_old():
     dest_table = 'kmonth_new'
     
     sql = "select * from stocklist order by code"
@@ -145,13 +135,11 @@ def update_kmonth():
     #alter table kmonth_new rename to kmonth;
 
  
-     
-engine = sqlalchemy.create_engine("mysql+pymysql://stock:stock@104.225.154.46:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
+engine = sqlalchemy.create_engine("mysql+pymysql://stock:stock@stock.riverriver.xyz:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
 metadata = sqlalchemy.MetaData(engine)
 conn_mysql = engine.connect()
 #stockdata = sqlalchemy.Table('stockdata', metadata, autoload=True, autoload_with=engine)
-
-mylist = sqlalchemy.Table('stocklist', metadata, autoload=True, autoload_with=engine)
+#mylist = sqlalchemy.Table('stocklist', metadata, autoload=True, autoload_with=engine)
 
 
 
@@ -161,6 +149,7 @@ month = today.month
 seq_today = year * 12 + month
 print("seq_today=",seq_today)
 
-#update_kmonth()
-query = "CREATE TABLE kmonth_ext as select k.*, s.`ROE(年化)`, s.`ROA(年化)`, s.每股净资产, s.毛利率 , s.`经营现金流净额比利润(年化)` , s.`母公司利润比例(年化)` , s.资产负债率 , s.基本每股收益年化 , s.营业收入YOY , s.营业成本YOY , s.营业利润YOY , s.净利润YOY , k.close / s.基本每股收益年化 PE,  k.close/(s.基本每股收益年化*(1+s.净利润YOY)) PEG, k.close/s.每股净资产 PB,  k.close*s.`实收资本(或股本)(万元)` 总市值 FROM kmonth k LEFT OUTER JOIN stockdata s ON (k.code=s.code and k.seq_season=s.seq);"
-conn_mysql.execute(query)  
+update_kmonth()
+#query = "CREATE TABLE kmonth_ext as select k.*, s.`ROE(年化)`, s.`ROA(年化)`, s.每股净资产, s.毛利率 , s.`经营现金流净额比利润(年化)` , s.`母公司利润比例(年化)` , s.资产负债率 , s.基本每股收益年化 , s.营业收入YOY , s.营业成本YOY , s.营业利润YOY , s.净利润YOY , k.close / s.基本每股收益年化 PE,  k.close/(s.基本每股收益年化*(1+s.净利润YOY)) PEG, k.close/s.每股净资产 PB,  k.close*s.`实收资本(或股本)(万元)` 总市值 FROM kmonth k LEFT OUTER JOIN stockdata s ON (k.code=s.code and k.seq_season=s.seq);"
+#conn_mysql.execute(query)  
+

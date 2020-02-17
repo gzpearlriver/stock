@@ -1,29 +1,30 @@
-#!/usr/bin/python
-# -*- coding: UTF-8 -*-
-#allow chinese character in program
-
-import sys
-defaultencoding = 'utf-8'
-if sys.getdefaultencoding() != defaultencoding:
-    reload(sys)
-    sys.setdefaultencoding(defaultencoding)
-#add above to prevent this error : "UnicodeDecodeError: 'ascii' codec can't decode byte 0xe9 in position 0: ordinal not in range(128)"
-
-    
 '''基于sqlite3的数据，输出图像化分析结果'''
-    
 import numpy as np
 import pandas as pd
-import sqlite3 as lite
-import matplotlib.pyplot as plt
+
 import pathlib
+
+import os
+import datetime
+import time
+import sqlalchemy
+
+import sys
+print(sys.getdefaultencoding())
+
+
+import matplotlib.pyplot as plt
 
 from pylab import mpl
 mpl.rcParams['font.sans-serif'] = ['FangSong']  # 指定默认字体
 mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显示为方块的问题
 
-chart_income_items=('营业收入年化',
-'营业利润年化',
+plt.rcParams['font.sans-serif']=['SimHei'] #用来正常显示中文标签
+plt.rcParams['axes.unicode_minus']=False #用来正常显示负号
+
+chart_income_items=('营业总收入年化',
+'利润总额年化',
+'工业利润自定义年化',
 '净利润年化',
 '归属于母公司所有者的净利润年化',
 '经营活动产生的现金流量净额年化',
@@ -44,13 +45,15 @@ chart_money_items=('货币资金(万元)',
 '所有者权益或股东权益合计(万元)',
 '存货(万元)')
 
-chart_rate_items=('ROE',
-'ROA',
+chart_rate_items=('ROE(年化)',
+'ROA(年化)',
 '资产负债率',
 '毛利率',
 '母公司利润比例',
 '经营现金流净额比利润',
 '现金流入比营业收入')
+
+
 
 chart_cashflow_items=('营业收入年化',
 '经营活动现金流入小计年化',
@@ -164,17 +167,22 @@ chart_fldfz_items=('长期借款(万元)',
 '递延所得税负债(万元)',
 '其他非流动负债(万元)')
 
-chart_crqr_items=('流动比率',
+chart_短期债务能力_items=('流动比率',
 '速动比率',
-'保守速动比率')
+'保守速动比率',
+'经营现金流与流动负债比值')
 #'产权比率',
 #'有形净值债务率'
 
-chart_zzczb_items=('本公司账户类现金与总资产比值',
-'非本公司账户类现金与总资产比值')
+chart_总资产含量_items=('资产负债率',
+'存货与总资产比值',
+'本公司账户类现金与总资产比值',
+'非本公司账户类现金与总资产比值',
+'流动资产与总资产比值',
+'货币与总资产比值')
 
 #所有收入
-chart_earning_items=('营业收入(万元)',
+chart_earning_items=('营业总收入(万元)',
 '利息收入(万元)',
 '已赚保费(万元)',
 '手续费及佣金收入(万元)',
@@ -190,7 +198,7 @@ chart_earning_items=('营业收入(万元)',
 '其他业务利润(万元)')
 
 #所有成本
-chart_cost_items=('营业成本(万元)',
+chart_cost_items=('营业总成本(万元)',
 '利息支出(万元)',
 '手续费及佣金支出(万元)',
 '房地产销售成本(万元)',
@@ -207,6 +215,15 @@ chart_cost_items=('营业成本(万元)',
 '财务费用(万元)',
 '资产减值损失(万元)')
 
+#单季经营情况
+chart_季度经营情况_items=('营业总收入单季',
+'营业总成本单季',
+'利润总额单季',
+'工业利润自定义单季', 
+'经营活动产生的现金流量净额单季',
+'投资活动产生的现金流量净额单季',
+'筹资活动产生的现金流量净额单季')
+
 #利润
 chart_profit_items=('营业利润(万元)',
 '营业外收入(万元)',
@@ -216,7 +233,8 @@ chart_profit_items=('营业利润(万元)',
 '所得税费用(万元)',
 '未确认投资损失(万元)',
 '净利润(万元)',
-'归属于母公司所有者的净利润(万元)')
+'归属于母公司所有者的净利润(万元)',
+'工业利润自定义')
 
 
 
@@ -255,7 +273,7 @@ def draw_scatter(title, horizon_source, vertical_source):
     plt.close('all')
 
 def draw_kmonth(title,left_source,right_source,index):
-    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.png'
+    pic_filename = stock_dir + "/" + code + name + '_' + title + '.png'
     fig1 = plt.figure()
     fig1.set_size_inches(12, 8 * 1)
     
@@ -263,7 +281,7 @@ def draw_kmonth(title,left_source,right_source,index):
     if True:
         ax1 = fig1.add_subplot(111)  
         ax1.plot(index, left_source,color='blue')
-        ax1.set_title(stock_name + " " + title)
+        ax1.set_title(name + " " + title)
         ax1.legend(loc='upper left')
         
         ax2=ax1.twinx()
@@ -283,60 +301,62 @@ def draw_kmonth(title,left_source,right_source,index):
     fig1.savefig(pic_filename, dpi=100)
     del fig1
     plt.close('all')
-    
-def versus(stock_code , stock_name):
+
+
+def versus(code , name):
     #各种对比
-    stock_dir=pic_dir + stock_code + stock_name
 
     print(stock_dir)
     pathlib.Path(stock_dir).mkdir(parents=True, exist_ok=True) 
 
 
-    query = "SELECT * from kmonth_ext where code='" + stock_code + "';"
-    onestock = pd.read_sql_query(query,conn)
-    print(onestock.columns)
+    query = "SELECT * from kmonth_ext where code='" + code + "';"
+    data = pd.read_sql_query(query,conn)
+    print(data.columns)
     
-    #onestock = kmonth_ext[kmonth_ext['name']==stock_name]
-    #onestock = onestock[onestock['date'] > '2010']
-    #print(len(onestock))
+    #data = kmonth_ext[kmonth_ext['name']==name]
+    #data = data[data['date'] > '2010']
+    #print(len(data))
     
-    draw_kmonth('总市值 vs 收市价',onestock['总市值'],onestock['close'],onestock['date'])
-    draw_kmonth('每股盈利 vs 收市价',onestock['基本每股收益年化'],onestock['close'],onestock['date'])
-    draw_kmonth('每股净资产 vs 收市价',onestock['每股净资产'],onestock['close'],onestock['date'])
-    draw_kmonth('PE vs 收市价',onestock['PE'],onestock['close'],onestock['date'])
-    draw_kmonth('PEG vs 总市值',onestock['PEG'],onestock['总市值'],onestock['date'])
-    draw_kmonth('PB vs 总市值',onestock['PB'],onestock['总市值'],onestock['date'])
-    draw_kmonth('ROE vs 总市值',onestock['ROE'],onestock['总市值'],onestock['date'])
-    draw_kmonth('ROA vs 总市值',onestock['ROA'],onestock['总市值'],onestock['date'])
-    draw_kmonth('毛利率',onestock['毛利率'],onestock['总市值'],onestock['date'])
+    draw_kmonth('总市值 vs 收市价',data['总市值'],data['close'],data['date'])
+    draw_kmonth('每股盈利 vs 收市价',data['基本每股收益年化'],data['close'],data['date'])
+    draw_kmonth('每股净资产 vs 收市价',data['每股净资产'],data['close'],data['date'])
+    draw_kmonth('PE vs 收市价',data['PE'],data['close'],data['date'])
+    draw_kmonth('PEG vs 总市值',data['PEG'],data['总市值'],data['date'])
+    draw_kmonth('PB vs 总市值',data['PB'],data['总市值'],data['date'])
+    draw_kmonth('ROE vs 总市值',data['ROE'],data['总市值'],data['date'])
+    draw_kmonth('ROA vs 总市值',data['ROA'],data['总市值'],data['date'])
+    draw_kmonth('毛利率',data['毛利率'],data['总市值'],data['date'])
 
 
 def draw_multiline(title, chart_items,stock_data):
-    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.png'
+    pic_filename = stock_dir + "/" + title + '.png'
     fig1 = plt.figure()
     fig1.set_size_inches(12, 8 * 1)
     ax1 = fig1.add_subplot(111)  
     
     #print(chart_items)    
     for item in chart_items:
+        #print(item)
         if item in stock_data.columns:
-            #print(stock_data.index, stock_data[item])
-            ax1.plot(stock_data['date'], stock_data[item]) 
+            print(stock_data['date'], stock_data[item])
+            ax1.plot(stock_data.index, stock_data[item], label=item ) 
 
-    ax1.set_title(stock_name + '  ' + title)
+    ax1.set_title(name + '  ' + title)
     ax1.legend(loc='upper left')
     for tick in ax1.get_xticklabels():
         tick.set_rotation(270)        
     
     plt.subplots_adjust(bottom=.1, top=.9, left=.1, right=.9)
     #plt.show()
+    print(pic_filename)
     fig1.savefig(pic_filename, dpi=100)
     del fig1
     plt.close('all')
     
 
 def draw_stack(title, chart_items, stock_data):
-    pic_filename = stock_dir + "/" + stock_code + stock_name + '_' + title + '.png'
+    pic_filename = stock_dir + "/" +  title + '.png'
     fig1 = plt.figure()
     fig1.set_size_inches(12, 8 * 1)
     
@@ -350,9 +370,14 @@ def draw_stack(title, chart_items, stock_data):
     ax1 = fig1.add_subplot(111)  
     y = np.array(df1.T)
 
+    
     ax1.stackplot(stock_data['date'], y, labels=chart_items) 
-    ax1.set_title(stock_name + '  ' + title)  
-    ax1.legend(loc='upper left')
+    ax1.set_title(name + '  ' + title)  
+
+    #ax1.legend(loc='upper left')
+    handles, labels = ax1.get_legend_handles_labels()
+    ax1.legend(reversed(handles), reversed(labels), title='图例', loc='upper left')
+    
     for tick in ax1.get_xticklabels():
         tick.set_rotation(270)
     del y, df1         
@@ -365,56 +390,63 @@ def draw_stack(title, chart_items, stock_data):
     plt.close('all')
 
 
-def finance_report(stock_code , stock_name):
+def finance_report(code , name):
     #各种对比
-    stock_dir = pic_dir + stock_code + stock_name
-
+    stock_dir = pic_dir + code + name
+    
     print(stock_dir)
     try:
         pathlib.Path(stock_dir).mkdir(parents=True) 
     except:
         print("dir already exist!")
 
-    query = "SELECT * from stock where code='" + stock_code + "';"
-    onestock = pd.read_sql_query(query,conn)
-    #print(onestock.columns)
-    #print(len(onestock))
-    csv_filename = stock_dir + "/" + stock_code + stock_name + '.csv'
-    onestock.to_csv(csv_filename,encoding='utf_8_sig')
-     
-    draw_stack('流动资产', chart_ldzc_items, onestock)
-    draw_stack('非流动资产', chart_fldzc_items, onestock)
-    draw_stack('流动负债', chart_ldfz_items, onestock)
-    draw_stack('非流动负债', chart_fldfz_items, onestock)
-    draw_stack('收入', chart_earning_items, onestock)
-    draw_stack('成本', chart_cost_items, onestock)
+    sql = "select * from stockdata where code = %s" % code
+    print(sql)
+    data = pd.read_sql_query(sql, conn_mysql, coerce_float =True)
+    data = data.set_index(data['date'])
+
+    csv_filename = stock_dir + "/" + code + name + '.csv'
+    data.to_csv(csv_filename,encoding='utf_8_sig')
+
+    data['流动资产与总资产比值'] = data['流动资产合计(万元)'] / data['资产总计(万元)']
+    data['货币与总资产比值'] = data['货币资金(万元)'] / data['资产总计(万元)']
+    data['经营现金流与流动负债比值'] = data['经营活动现金流入小计年化'] / data['流动负债合计(万元)']
+
+
+    draw_stack('流动资产', chart_ldzc_items, data)
+    draw_stack('非流动资产', chart_fldzc_items, data)
+    draw_stack('流动负债', chart_ldfz_items, data)
+    draw_stack('非流动负债', chart_fldfz_items, data)
+    draw_stack('收入', chart_earning_items, data)
+    draw_stack('成本', chart_cost_items, data)
     
-    draw_multiline('利润', chart_profit_items, onestock)
-    draw_multiline('年化营收', chart_income_items, onestock)
-    draw_multiline('资产与负债', chart_value_items, onestock)
-    draw_multiline('资产与资金', chart_money_items, onestock)
-    draw_multiline('现金流', chart_cashflow_items, onestock)
-    draw_multiline('ROE和毛利率', chart_rate_items, onestock)
-    draw_multiline('年增长', chart_yoy_items, onestock)
-    draw_multiline('流动比率、速动比率和保守速动比率', chart_crqr_items, onestock)
-    draw_multiline('本公司现金和非本公司现金', chart_zzczb_items, onestock)
+    draw_multiline('利润', chart_profit_items, data)
+    draw_multiline('年化营收', chart_income_items, data)
+    draw_multiline('资产与负债', chart_value_items, data)
+    draw_multiline('资产与资金', chart_money_items, data)
+    draw_multiline('现金流', chart_cashflow_items, data)
+    draw_multiline('ROE和毛利率', chart_rate_items, data)
+    draw_multiline('年增长', chart_yoy_items, data)
+    draw_multiline('流动比率、速动比率和保守速动比率', chart_短期债务能力_items, data)
+    draw_multiline('总资产含量', chart_总资产含量_items, data)
+    draw_multiline('季度经营情况', chart_季度经营情况_items, data)
 
 
 
-#main program begin here    
-#db_file = '/code/stock/stock.db'
-#pic_dir = '/stockdata/pic/'
-db_file = 'D:\\stockdata\\stock.db'
-pic_dir = 'D:\\stockdata\\pic\\'
-conn=lite.connect(db_file)
-cur = conn.cursor()
 
-stock_name='安道麦'
-stock_code='000553'
-stock_dir=pic_dir + stock_code + stock_name
+engine = sqlalchemy.create_engine("mysql+pymysql://stock:stock@stock.riverriver.xyz:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
+metadata = sqlalchemy.MetaData(engine)
+conn_mysql = engine.connect()
+#stockdata = sqlalchemy.Table('stockdata', metadata, autoload=True, autoload_with=engine)
 
-#versus(stock_code , stock_name)
-finance_report(stock_code , stock_name)
+#pic_dir = 'D:/stockdata/pic/'
+pic_dir = '/stockdata/pic/'
+name='美的'
+code='000333'
+stock_dir=pic_dir + code + name
+
+#versus(code , name)
+finance_report(code , name)
 
 '''query = "SELECT * from kmonth_ext;"
 kmonth_ext = pd.read_sql_query(query,conn)
@@ -439,3 +471,4 @@ horizon_source = stock_sel['PE合计']
 vertical_source = stock_sel['营业利润YOY']
 draw_scatter('PE vs 营业利润YOY', horizon_source, vertical_source)
 '''
+

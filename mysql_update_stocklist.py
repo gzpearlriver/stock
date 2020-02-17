@@ -27,6 +27,7 @@ del oldlist['index']
 
 tslist = ts.get_stock_basics()
 
+
 if len(tslist)>0:
     tslist = tslist.reset_index()
     newlist = pd.DataFrame()
@@ -58,40 +59,49 @@ if len(tslist)>0:
     print(len(same_n_o))
     
     #筛选新股票
-    new_stock = newlist[newlist['code'].isin(delta_n_o)]
-    new_stock.loc[:, 'new'] = True
-    new_stock.loc[:, 'trading'] = True
-    new_stock.loc[:, 'lastread163'] = date.today()
-    new_stock.loc[:, 'seq'] = 0
-    
+    if  len(delta_n_o)> 0:
+        new_stock = newlist[newlist['code'].isin(delta_n_o)]
+        new_stock.loc[:, 'new'] = True
+        new_stock.loc[:, 'trading'] = True
+        new_stock.loc[:, 'lastread163'] = date.today()
+        new_stock.loc[:, 'seq'] = 0
+    else:
+        new_stock=pd.DataFrame()
+        
     #筛选旧股票
-    old_stock = oldlist[oldlist['code'].isin(same_n_o)]
-    old_stock.loc[:, 'new'] = True
-    old_stock.loc[:, 'trading'] = True
-
+    if  len(delta_o_n) > 0 :
+        old_stock = oldlist[oldlist['code'].isin(same_n_o)]
+        old_stock.loc[:, 'new'] = True
+        old_stock.loc[:, 'trading'] = True
+    else:
+        old_stock=pd.DataFrame()
     
     #筛选退市股票
-    off_stock = oldlist[oldlist['code'].isin(delta_o_n)]
-    old_stock.loc[:, 'new'] = False
-    old_stock.loc[:, 'trading'] = False
-    
+    if len(same_n_o) >0 :
+        off_stock = oldlist[oldlist['code'].isin(delta_o_n)]
+        off_stock.loc[:, 'new'] = False
+        off_stock.loc[:, 'trading'] = False
+    else:
+        off_stock=pd.DataFrame()
+        
     stocklist = pd.concat([new_stock, old_stock, off_stock], ignore_index=True, sort=True)
     
     print(stocklist.columns,len(stocklist))
     print(stocklist.iloc[0:3,:])
  
     try:
-        cur.execute('drop index stocklist_old;')
+        conn_mysql.execute('drop table stocklist_old;')
     except:
-        print('drop index stocklist_old fail')
+        print('drop table stocklist_old fail')
         
     try:
-        cur.execute('alter table stocklist rename to stocklist_old;')
+        conn_mysql.execute('alter table stocklist rename to stocklist_old;')
     except:
         print('alter table stocklist rename fail')
 
     stocklist.to_sql('stocklist', con=conn_mysql, if_exists='replace')
-        
+    print("update stocklist !!!")
+    
     '''
     try:
         cur.execute('drop index stocklist_old;')
@@ -118,5 +128,7 @@ if len(tslist)>0:
     except:
         print('insert stocklist fail')
     '''
-        
+else:
+    print("error in get stock list from ts")
+    
 conn_mysql.close()
