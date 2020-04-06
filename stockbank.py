@@ -680,14 +680,15 @@ def change_col_prepare():
         print('alter table stockdata rename fail')
 
         
-def get_stockdata(conn_mysql, sql=''):
+def analyze_market(conn_mysql, seq):
     
-    today = datetime.date.today()
+    '''    today = datetime.date.today()
     year = today.year
     month = today.month
     seq_today = year * 4 + month // 4
-    print("seq_today=",seq_today)
+    print("seq_today=",seq_today)'''
     
+    sql = " select * from stockdata where seq = ' %s ' ;" %seq
     print(sql)
     data = pd.read_sql_query(sql, conn_mysql)
     
