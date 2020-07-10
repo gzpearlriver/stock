@@ -11,8 +11,10 @@ import sys
 
 import tushare as ts
 
+#aliyun vps
+engine = sqlalchemy.create_engine("mysql+pymysql://stock:stock@120.25.237.31:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
 
-engine = sqlalchemy.create_engine("mysql+mysqlconnector://stock:stock@stock.riverriver.xyz:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
+#engine = sqlalchemy.create_engine("mysql+mysqlconnector://stock:stock@stock.riverriver.xyz:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
 #engine = sqlalchemy.create_engine("mysql+mysqlconnector://stock:stock@66.98.125.27:3306/stock?use_unicode=1&charset=utf8",encoding='utf-8',echo=False,max_overflow=5)
 metadata = sqlalchemy.MetaData(engine)
 conn_mysql = engine.connect()
